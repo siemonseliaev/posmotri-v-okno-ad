@@ -1,7 +1,7 @@
 /* КОНФИГ */
 const preloaderWaitindTime = 1200;
 const cardsOnPage = 5;
-const BASE_URL = 'https://v-content.practicum-team.ru';
+const BASE_URL = '';
 const endpoint = `${BASE_URL}/api/videos?pagination[pageSize]=${cardsOnPage}&`;
 
 /* ЭЛЕМЕНТЫ СТРАНИЦЫ */
@@ -59,7 +59,7 @@ form.onsubmit = (e) => {
 
 async function mainMechanics(endpoint) {
   try {
-    const data = await (await fetch(endpoint)).json();
+    const data = await (await window.localVideoApi.fetch(endpoint)).json();
     cardsOnPageState = data.results;
 
     if (!data?.results?.[0]) {
@@ -199,7 +199,7 @@ function serializeFormData(form) {
 // Генерирует строку с фильтрами запросов в API в зависимости от данных из формы ✅
 function generateFilterRequest(endpoint, city, timeArray) {
   if (city) {
-    endpoint += `filters[city][$containsi]=${city}&`;
+    endpoint += `filters[city][$containsi]=${encodeURIComponent(city)}&`;  
   }
   if (timeArray) {
     timeArray.forEach((timeslot) => {
@@ -276,8 +276,7 @@ function showMoreCards({
     let currentPage = dataArray.pagination.page;
     let urlToFetch = `${initialEndpoint}pagination[page]=${(currentPage += 1)}&`;
     try {
-      let data = await (await fetch(urlToFetch)).json();
-      buttonInDOM.remove();
+      let data = await (await window.localVideoApi.fetch(urlToFetch)).json();      buttonInDOM.remove();
       cardsOnPageState = cardsOnPageState.concat(data.results);
       appendCards({
         baseUrl,
