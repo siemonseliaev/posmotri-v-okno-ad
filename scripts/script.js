@@ -23,16 +23,17 @@ const moreButtonTmp = document.querySelector('.more-button-template');
 let cardsOnPageState = [];
 
 // Первая загрузка ✅
-
 showPreloader(preloaderTmp, videoContainer);
 showPreloader(preloaderTmp, cardsContainer);
 mainMechanics(endpoint);
 
-// осуществляется поиск ✅
+// Осуществляется поиск ✅
 form.onsubmit = (e) => {
   e.preventDefault();
 
   cardsList.textContent = '';
+  cardsOnPageState = [];
+
   const buttonInDOM = cardsContainer.querySelector('.more-button');
   if (buttonInDOM) {
     buttonInDOM.remove();
@@ -55,11 +56,15 @@ form.onsubmit = (e) => {
   mainMechanics(requestUrl);
 };
 
-/* ФУНКЦИЯ, КОТОРАЯ ВСЕ ГЕНЕРИТ */
+/* ФУНКЦИЯ, КОТОРАЯ ВСЁ ГЕНЕРИТ */
 
 async function mainMechanics(endpoint) {
   try {
-    const data = await (await window.localVideoApi.fetch(endpoint)).json();
+    const response = await window.localVideoApi.fetch(endpoint);
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status}`);
+    }
+    const data = await response.json();
     cardsOnPageState = data.results;
 
     if (!data?.results?.[0]) {
@@ -122,15 +127,13 @@ async function mainMechanics(endpoint) {
 /* УТИЛИТЫ */
 
 // Простой промис, чтобы легче ставить паузу ✅
-
 async function delay(ms) {
   return await new Promise((resolve) => {
     return setTimeout(resolve, ms);
   });
 }
 
-// Промис, который резолвится, если видео целиком готово к проинрыванию без пауз
-
+// Промис, который резолвится, если видео готово к проигрыванию
 async function waitForReadyVideo(video) {
   return await new Promise((resolve) => {
     video.oncanplaythrough = resolve;
@@ -150,7 +153,6 @@ function removePreloader(parent, preloaderSelector) {
   if (preloader) {
     preloader.remove();
   }
-
   console.log('убрал прелоадер');
 }
 
@@ -173,15 +175,14 @@ function appendCards({ baseUrl, dataArray, cardTmp, container }) {
   console.log('Сгенерировал карточки');
 }
 
-// Устанавливет внужное видео в контейнер ✅
+// Устанавливает нужное видео в контейнер ✅
 function setVideo({ baseUrl, video, videoUrl, posterUrl }) {
   video.setAttribute('src', `${baseUrl}${videoUrl}`);
   video.setAttribute('poster', `${baseUrl}${posterUrl}`);
   console.log('Подставил видео в основной блок');
 }
 
-// получает данные из формы и сериализует как надо ✅
-
+// Получает данные из формы и сериализует как надо ✅
 function serializeFormData(form) {
   const city = form.querySelector('input[name="city"]');
   const checkboxes = form.querySelectorAll('input[name="time"]');
@@ -199,7 +200,7 @@ function serializeFormData(form) {
 // Генерирует строку с фильтрами запросов в API в зависимости от данных из формы ✅
 function generateFilterRequest(endpoint, city, timeArray) {
   if (city) {
-    endpoint += `filters[city][$containsi]=${encodeURIComponent(city)}&`;  
+    endpoint += `filters[city][$containsi]=${encodeURIComponent(city)}&`;
   }
   if (timeArray) {
     timeArray.forEach((timeslot) => {
@@ -210,7 +211,7 @@ function generateFilterRequest(endpoint, city, timeArray) {
   return endpoint;
 }
 
-// переключает текущее видео ✅
+// Переключает текущее видео ✅
 function chooseCurrentVideo({
   baseUrl,
   videoData,
@@ -240,13 +241,18 @@ function chooseCurrentVideo({
         await waitForReadyVideo(mainVideo);
         await delay(preloaderWaitindTime);
         removePreloader(videoContainer, '.preloader');
+        try {
+          await mainVideo.play();
+        } catch (err) {
+          console.log('Автовоспроизведение заблокировано браузером:', err);
+        }
         console.log('Переключил видео');
       };
     });
   }
 }
 
-// вывожу интерфейс, когда видео не найдено ✅
+// Выводит интерфейс, когда видео не найдено ✅
 function showError(container, errorTemplate, errorMessage) {
   const node = errorTemplate.content.cloneNode(true);
   node.querySelector('.error__title').textContent = errorMessage;
@@ -254,8 +260,7 @@ function showError(container, errorTemplate, errorMessage) {
   console.log('показал, ошибку');
 }
 
-// вывожу больше видео, если в пагинации больше страниц, чем показано
-
+// Выводит больше видео, если в пагинации больше страниц, чем показано
 function showMoreCards({
   dataArray,
   buttonTemplate,
@@ -266,17 +271,21 @@ function showMoreCards({
   cardTmp,
 }) {
   if (dataArray.pagination.page === dataArray.pagination.pageCount) return;
-  // добавить кнопку из темплейта в конец списка карточек
+  // Добавить кнопку из темплейта в конец списка карточек
   const button = buttonTemplate.content.cloneNode(true);
   cardsContainer.append(button);
   // Выберем добавленный элемент по селектору и добавим слушатель клика
   const buttonInDOM = cardsContainer.querySelector(buttonSelector);
   buttonInDOM.addEventListener('click', async () => {
-    // по клику запросим данные для следующей страницы
+    // По клику запросим данные для следующей страницы
     let currentPage = dataArray.pagination.page;
     let urlToFetch = `${initialEndpoint}pagination[page]=${(currentPage += 1)}&`;
     try {
-      let data = await (await window.localVideoApi.fetch(urlToFetch)).json();      buttonInDOM.remove();
+      const response = await window.localVideoApi.fetch(urlToFetch);
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+      let data = await response.json();
       cardsOnPageState = cardsOnPageState.concat(data.results);
       appendCards({
         baseUrl,
@@ -305,3 +314,18 @@ function showMoreCards({
     }
   });
 }
+
+window.localVideoApi
+  .fetch('./v-content.json')
+  .then((response) => {
+    if (!response.ok) {
+      throw new Error(`Ошибка загрузки: ${response.status}`);
+    }
+    return response.json();
+  })
+  .then((data) => {
+    console.log(data); // { service: "v-content", status: "ok" }
+  })
+  .catch((error) => {
+    console.error(error);
+  });
